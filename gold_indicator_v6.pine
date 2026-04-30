@@ -1,0 +1,118 @@
+//@version=6
+indicator("Gold Trading Signals v6", overlay=true, max_labels_count=500, max_boxes_count=500)
+
+// ============================================
+// GOLD TRADING INDICATOR v6
+// Professional Trading Signals with Alerts
+// ============================================
+
+// INPUT PARAMETERS
+rsi_length = input.int(14, "RSI Length", minval=5, maxval=50)
+rsi_overbought = input.int(70, "RSI Overbought Level", minval=50, maxval=90)
+rsi_oversold = input.int(30, "RSI Oversold Level", minval=10, maxval=50)
+
+fast_ma = input.int(9, "Fast MA Length", minval=2, maxval=50)
+slow_ma = input.int(21, "Slow MA Length", minval=5, maxval=200)
+
+macd_fast = input.int(12, "MACD Fast", minval=5, maxval=50)
+macd_slow = input.int(26, "MACD Slow", minval=10, maxval=100)
+macd_signal = input.int(9, "MACD Signal", minval=3, maxval=50)
+
+show_alerts = input(true, "Show Alert Boxes")
+show_info = input(true, "Show Info Panel")
+
+// ============================================
+// INDICATOR CALCULATIONS
+// ============================================
+
+// RSI Calculation
+rsi = ta.rsi(close, rsi_length)
+
+// Moving Averages
+ma_fast = ta.sma(close, fast_ma)
+ma_slow = ta.sma(close, slow_ma)
+
+// MACD Calculation
+[macd_line, signal_line, histogram] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+
+// ============================================
+// SIGNAL LOGIC
+// ============================================
+
+// Trend Detection
+trend_up = ma_fast > ma_slow
+trend_down = ma_fast < ma_slow
+
+// RSI Signals
+rsi_buy = rsi < rsi_oversold
+rsi_sell = rsi > rsi_overbought
+
+// MACD Signals
+macd_buy = macd_line > signal_line and histogram > 0
+macd_sell = macd_line < signal_line and histogram < 0
+
+// ============================================
+// BUY SIGNAL
+// ============================================
+buy_signal = trend_up and rsi_buy and macd_buy
+strong_buy = buy_signal and rsi < 20
+
+// ============================================
+// SELL SIGNAL
+// ============================================
+sell_signal = trend_down and rsi_sell and macd_sell
+strong_sell = sell_signal and rsi > 80
+
+// ============================================
+// ALERTS
+// ============================================
+
+alertmessage_buy = "🟢 GOLD BUY SIGNAL - RSI: " + str.tostring(rsi, "#.##") + " | Price: " + str.tostring(close, "#.##")
+alertmessage_sell = "🔴 GOLD SELL SIGNAL - RSI: " + str.tostring(rsi, "#.##") + " | Price: " + str.tostring(close, "#.##")
+
+if buy_signal
+    alert(alertmessage_buy, alert.freq_once_per_bar_close)
+if sell_signal
+    alert(alertmessage_sell, alert.freq_once_per_bar_close)
+
+// ============================================
+// PLOTTING
+// ============================================
+
+// Moving Averages
+plot(ma_fast, "Fast MA", color=color.blue, linewidth=2)
+plot(ma_slow, "Slow MA", color=color.orange, linewidth=2)
+
+// Buy Signals
+if buy_signal
+    box.new(bar_index, high, bar_index, high + (high * 0.002), bgcolor=color.new(color.green, 80), border_color=color.green, border_width=2)
+    label.new(bar_index, high * 1.001, "BUY", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+if strong_buy
+    box.new(bar_index, high, bar_index, high + (high * 0.003), bgcolor=color.new(color.lime, 80), border_color=color.lime, border_width=3)
+    label.new(bar_index, high * 1.002, "STRONG BUY", color=color.new(color.lime, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// Sell Signals
+if sell_signal
+    box.new(bar_index, low, bar_index, low - (low * 0.002), bgcolor=color.new(color.red, 80), border_color=color.red, border_width=2)
+    label.new(bar_index, low * 0.999, "SELL", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+if strong_sell
+    box.new(bar_index, low, bar_index, low - (low * 0.003), bgcolor=color.new(color.maroon, 80), border_color=color.maroon, border_width=3)
+    label.new(bar_index, low * 0.998, "STRONG SELL", color=color.new(color.maroon, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+// ============================================
+// INFO PANEL
+// ============================================
+
+if show_info
+    info_text = ""
+    info_text += "RSI: " + str.tostring(rsi, "#.##") + "\n"
+    info_text += "Price: " + str.tostring(close, "#.##") + "\n"
+    info_text += "Trend: " + (trend_up ? "📈 UP" : "📉 DOWN") + "\n"
+    info_text += "Fast MA: " + str.tostring(ma_fast, "#.##") + "\n"
+    info_text += "Slow MA: " + str.tostring(ma_slow, "#.##") + "\n"
+    info_text += "MACD: " + str.tostring(macd_line, "#.##") + "\n"
+    info_text += "Signal: " + str.tostring(signal_line, "#.##")
+    
+    label.new(bar_index, high, info_text, color=color.new(color.gray, 80), textcolor=color.white, style=label.style_label_left, size=size.small)
