@@ -1,0 +1,301 @@
+//@version=6
+indicator("🏆 Gold Scalper FINAL v6 - Professional Edition", overlay=true, max_labels_count=500, max_boxes_count=500)
+
+// ============================================
+// GOLD SCALPER FINAL v6
+// Ultra-Premium Scalping Signals
+// For 1M & 5M Charts - Professional Edition
+// Risk/Reward ALWAYS 2.0:1 or Better
+// ============================================
+
+// ============================================
+// INPUT PARAMETERS
+// ============================================
+
+// RSI Settings (Optimized for 1M/5M)
+rsi_length = input.int(7, "🔴 RSI Length", minval=3, maxval=20)
+rsi_overbought = input.int(65, "RSI Overbought Level", minval=50, maxval=80)
+rsi_oversold = input.int(35, "RSI Oversold Level", minval=20, maxval=50)
+
+// Moving Averages (Fast Trend Detection)
+fast_ma = input.int(5, "📈 Fast MA Length", minval=2, maxval=20)
+slow_ma = input.int(12, "📊 Slow MA Length", minval=5, maxval=30)
+
+// MACD (Scalping Optimized)
+macd_fast = input.int(5, "⚡ MACD Fast", minval=2, maxval=15)
+macd_slow = input.int(13, "⚡ MACD Slow", minval=5, maxval=30)
+macd_signal = input.int(5, "⚡ MACD Signal", minval=2, maxval=15)
+
+// Advanced Filters
+min_rsi_strength = input.int(10, "Min RSI Strength", minval=5, maxval=25)
+confluence_required = input.int(3, "Min Confluence (3 or 4)", minval=2, maxval=4)
+
+// Risk/Reward Settings
+rr_target = input.float(2.0, "💰 Target R:R Ratio", minval=1.5, maxval=5.0, step=0.1)
+atr_multiplier_sl = input.float(1.0, "ATR Multiplier for SL", minval=0.5, maxval=2.0, step=0.1)
+atr_multiplier_tp = input.float(2.0, "ATR Multiplier for TP", minval=1.0, maxval=4.0, step=0.1)
+
+// Display Options
+show_levels = input(true, "Show SL/TP Levels")
+show_info = input(true, "Show Info Panel")
+show_confluence = input(true, "Show Confluence Score")
+
+// ============================================
+// CORE CALCULATIONS
+// ============================================
+
+// RSI
+rsi = ta.rsi(close, rsi_length)
+
+// Moving Averages
+ma_fast = ta.sma(close, fast_ma)
+ma_slow = ta.sma(close, slow_ma)
+
+// MACD
+[macd_line, signal_line, histogram] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+
+// ATR for Dynamic SL/TP (3-period for tight stops)
+atr = ta.atr(3)
+
+// ============================================
+// SIGNAL FILTERS
+// ============================================
+
+// Trend Analysis
+trend_up = ma_fast > ma_slow
+trend_down = ma_fast < ma_slow
+trend_strength = math.abs(ma_fast - ma_slow) / ma_slow * 100  // % difference
+trend_strong = trend_strength > 0.2  // 0.2% minimum
+
+// RSI Analysis
+rsi_distance_from_50 = math.abs(rsi - 50)
+rsi_buy_signal = rsi < rsi_oversold and (50 - rsi) > min_rsi_strength
+rsi_sell_signal = rsi > rsi_overbought and (rsi - 50) > min_rsi_strength
+
+// MACD Analysis
+macd_buy = histogram > 0 and macd_line > signal_line and histogram > histogram[1]
+macd_sell = histogram < 0 and macd_line < signal_line and histogram < histogram[1]
+
+// Price Position
+price_above_fast_ma = close > ma_fast
+price_below_fast_ma = close < ma_fast
+
+// ============================================
+// CONFLUENCE SCORING (0-4 Points)
+// ============================================
+
+confluence_buy = 0
+confluence_sell = 0
+
+// Point 1: Trend
+if trend_up
+    confluence_buy += 1
+if trend_down
+    confluence_sell += 1
+
+// Point 2: RSI Extreme
+if rsi < rsi_oversold
+    confluence_buy += 1
+if rsi > rsi_overbought
+    confluence_sell += 1
+
+// Point 3: MACD Confirmation
+if macd_buy
+    confluence_buy += 1
+if macd_sell
+    confluence_sell += 1
+
+// Point 4: Price Position
+if price_above_fast_ma
+    confluence_buy += 1
+if price_below_fast_ma
+    confluence_sell += 1
+
+// ============================================
+// FINAL SIGNAL GENERATION
+// ============================================
+
+// Base Signal (3 main confluences)
+buy_signal = rsi_buy_signal and macd_buy and trend_up and confluence_buy >= confluence_required
+sell_signal = rsi_sell_signal and macd_sell and trend_down and confluence_sell >= confluence_required
+
+// Ultra Premium Signal (All 4 confluences + extra conditions)
+premium_buy = buy_signal and confluence_buy == 4 and rsi < 25 and trend_strong
+premium_sell = sell_signal and confluence_sell == 4 and rsi > 75 and trend_strong
+
+// Super Premium (Only best of best)
+super_premium_buy = premium_buy and histogram > histogram[1] and histogram > 0
+super_premium_sell = premium_sell and histogram < histogram[1] and histogram < 0
+
+// ============================================
+// RISK/REWARD CALCULATION
+// ============================================
+
+// Dynamic SL/TP based on ATR
+sl_pips_buy = atr * atr_multiplier_sl
+tp_pips_buy = sl_pips_buy * rr_target
+
+sl_pips_sell = atr * atr_multiplier_sl
+tp_pips_sell = sl_pips_sell * rr_target
+
+// Price Levels
+sl_buy = close - sl_pips_buy
+tp_buy = close + tp_pips_buy
+rr_buy = tp_pips_buy / sl_pips_buy
+
+sl_sell = close + sl_pips_sell
+tp_sell = close - tp_pips_sell
+rr_sell = tp_pips_sell / sl_pips_sell
+
+// Risk/Reward info (in Pips)
+risk_pips_buy = sl_pips_buy
+profit_pips_buy = tp_pips_buy
+
+risk_pips_sell = sl_pips_sell
+profit_pips_sell = tp_pips_sell
+
+// ============================================
+// ALERTS WITH DETAILED INFO
+// ============================================
+
+if buy_signal
+    alert_text = "🟢 GOLD BUY SIGNAL\nPrice: " + str.tostring(close, "#.##") + " | RSI: " + str.tostring(rsi, "#.##") + "\nEntry: " + str.tostring(close, "#.##") + " | SL: " + str.tostring(sl_buy, "#.##") + " | TP: " + str.tostring(tp_buy, "#.##") + "\nR:R: " + str.tostring(rr_buy, "#.##") + ":1 | Risk: " + str.tostring(risk_pips_buy, "#.##") + " pips | Profit: " + str.tostring(profit_pips_buy, "#.##") + " pips | Confluence: " + str.tostring(confluence_buy) + "/4"
+    alert(alert_text, alert.freq_once_per_bar_close)
+
+if sell_signal
+    alert_text = "🔴 GOLD SELL SIGNAL\nPrice: " + str.tostring(close, "#.##") + " | RSI: " + str.tostring(rsi, "#.##") + "\nEntry: " + str.tostring(close, "#.##") + " | SL: " + str.tostring(sl_sell, "#.##") + " | TP: " + str.tostring(tp_sell, "#.##") + "\nR:R: " + str.tostring(rr_sell, "#.##") + ":1 | Risk: " + str.tostring(risk_pips_sell, "#.##") + " pips | Profit: " + str.tostring(profit_pips_sell, "#.##") + " pips | Confluence: " + str.tostring(confluence_sell) + "/4"
+    alert(alert_text, alert.freq_once_per_bar_close)
+
+if premium_buy
+    alert("💎 PREMIUM BUY SIGNAL! R:R: " + str.tostring(rr_buy, "#.##") + ":1 | Entry: " + str.tostring(close, "#.##") + " | Confluence: 4/4", alert.freq_once_per_bar_close)
+
+if premium_sell
+    alert("💎 PREMIUM SELL SIGNAL! R:R: " + str.tostring(rr_sell, "#.##") + ":1 | Entry: " + str.tostring(close, "#.##") + " | Confluence: 4/4", alert.freq_once_per_bar_close)
+
+if super_premium_buy
+    alert("💎💎💎 SUPER PREMIUM BUY - ULTRA STRONG! Entry: " + str.tostring(close, "#.##") + " | R:R: " + str.tostring(rr_buy, "#.##") + ":1 | Confluence: 4/4 PERFECT!", alert.freq_once_per_bar_close)
+
+if super_premium_sell
+    alert("💎💎💎 SUPER PREMIUM SELL - ULTRA STRONG! Entry: " + str.tostring(close, "#.##") + " | R:R: " + str.tostring(rr_sell, "#.##") + ":1 | Confluence: 4/4 PERFECT!", alert.freq_once_per_bar_close)
+
+// ============================================
+// PLOTTING - MOVING AVERAGES
+// ============================================
+
+plot(ma_fast, "Fast MA(5)", color=color.new(color.blue, 0), linewidth=2)
+plot(ma_slow, "Slow MA(12)", color=color.new(color.orange, 0), linewidth=2)
+
+// ============================================
+// PLOTTING - BUY SIGNALS
+// ============================================
+
+if buy_signal
+    box.new(bar_index, high + atr*0.4, bar_index, high - atr*0.4, 
+            bgcolor=color.new(color.green, 70), border_color=color.green, border_width=2)
+    label.new(bar_index, high + atr*0.6, "BUY" + (confluence_buy == 4 ? " 4/4" : " " + str.tostring(confluence_buy) + "/4") + " R:R " + str.tostring(rr_buy, "#.##") + ":1", 
+              color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+if premium_buy
+    box.new(bar_index, high + atr*0.6, bar_index, high - atr*0.6, 
+            bgcolor=color.new(color.lime, 50), border_color=color.lime, border_width=3)
+    label.new(bar_index, high + atr*0.9, "💎 PREMIUM BUY 4/4 R:R " + str.tostring(rr_buy, "#.##") + ":1", 
+              color=color.new(color.lime, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+if super_premium_buy
+    box.new(bar_index, high + atr*0.8, bar_index, high - atr*0.8, 
+            bgcolor=color.new(color.lime, 30), border_color=color.lime, border_width=4)
+    label.new(bar_index, high + atr*1.2, "💎💎💎 SUPER PREMIUM R:R " + str.tostring(rr_buy, "#.##") + ":1", 
+              color=color.new(color.lime, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// ============================================
+// PLOTTING - SELL SIGNALS
+// ============================================
+
+if sell_signal
+    box.new(bar_index, low - atr*0.4, bar_index, low + atr*0.4, 
+            bgcolor=color.new(color.red, 70), border_color=color.red, border_width=2)
+    label.new(bar_index, low - atr*0.6, "SELL" + (confluence_sell == 4 ? " 4/4" : " " + str.tostring(confluence_sell) + "/4") + " R:R " + str.tostring(rr_sell, "#.##") + ":1", 
+              color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+if premium_sell
+    box.new(bar_index, low - atr*0.6, bar_index, low + atr*0.6, 
+            bgcolor=color.new(color.maroon, 50), border_color=color.maroon, border_width=3)
+    label.new(bar_index, low - atr*0.9, "💎 PREMIUM SELL 4/4 R:R " + str.tostring(rr_sell, "#.##") + ":1", 
+              color=color.new(color.maroon, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+if super_premium_sell
+    box.new(bar_index, low - atr*0.8, bar_index, low + atr*0.8, 
+            bgcolor=color.new(color.maroon, 30), border_color=color.maroon, border_width=4)
+    label.new(bar_index, low - atr*1.2, "💎💎💎 SUPER PREMIUM R:R " + str.tostring(rr_sell, "#.##") + ":1", 
+              color=color.new(color.maroon, 0), textcolor=color.white, style=label.style_label_up, size=size.small)
+
+// ============================================
+// PLOTTING - SL/TP LEVELS
+// ============================================
+
+if show_levels and buy_signal
+    line.new(bar_index, sl_buy, bar_index + 10, sl_buy, color=color.new(color.red, 70), width=2, style=line.style_dashed)
+    label.new(bar_index + 5, sl_buy, "SL " + str.tostring(sl_buy, "#.##"), color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_right, size=size.tiny)
+    
+    line.new(bar_index, tp_buy, bar_index + 10, tp_buy, color=color.new(color.green, 70), width=2, style=line.style_dashed)
+    label.new(bar_index + 5, tp_buy, "TP " + str.tostring(tp_buy, "#.##"), color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_right, size=size.tiny)
+
+if show_levels and sell_signal
+    line.new(bar_index, sl_sell, bar_index + 10, sl_sell, color=color.new(color.red, 70), width=2, style=line.style_dashed)
+    label.new(bar_index + 5, sl_sell, "SL " + str.tostring(sl_sell, "#.##"), color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_right, size=size.tiny)
+    
+    line.new(bar_index, tp_sell, bar_index + 10, tp_sell, color=color.new(color.green, 70), width=2, style=line.style_dashed)
+    label.new(bar_index + 5, tp_sell, "TP " + str.tostring(tp_sell, "#.##"), color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_right, size=size.tiny)
+
+// ============================================
+// INFO PANEL - PREMIUM DISPLAY
+// ============================================
+
+if show_info
+    info_text = ""
+    info_text += "═══════════════════════════════════\n"
+    info_text += "🏆 GOLD SCALPER FINAL v6 PRO\n"
+    info_text += "═══════════════════════════════════\n"
+    info_text += "Price: " + str.tostring(close, "#.##") + " | RSI(7): " + str.tostring(rsi, "#.##") + "\n"
+    info_text += "Trend: " + (trend_up ? "📈 UP (Strong)" : trend_down ? "📉 DOWN (Strong)" : "〰️ FLAT") + "\n"
+    info_text += "Trend Strength: " + str.tostring(trend_strength, "#.##") + "%\n"
+    info_text += "ATR(3): " + str.tostring(atr, "#.##") + " pips\n"
+    info_text += "═══════════════════════════════════\n"
+    
+    if buy_signal or sell_signal
+        if buy_signal
+            info_text += "🟢 BUY SIGNAL ACTIVE\n"
+            info_text += "Entry: " + str.tostring(close, "#.##") + "\n"
+            info_text += "Stop Loss: " + str.tostring(sl_buy, "#.##") + "\n"
+            info_text += "Take Profit: " + str.tostring(tp_buy, "#.##") + "\n"
+            info_text += "Risk Pips: " + str.tostring(risk_pips_buy, "#.##") + " | Profit Pips: " + str.tostring(profit_pips_buy, "#.##") + "\n"
+            info_text += "Risk/Reward: " + str.tostring(rr_buy, "#.##") + ":1 ✅\n"
+            info_text += "Confluence: " + str.tostring(confluence_buy) + "/4\n"
+            if premium_buy
+                info_text += "Signal Quality: 💎 PREMIUM\n"
+            if super_premium_buy
+                info_text += "Signal Quality: 💎💎💎 SUPER PREMIUM\n"
+        
+        if sell_signal
+            info_text += "🔴 SELL SIGNAL ACTIVE\n"
+            info_text += "Entry: " + str.tostring(close, "#.##") + "\n"
+            info_text += "Stop Loss: " + str.tostring(sl_sell, "#.##") + "\n"
+            info_text += "Take Profit: " + str.tostring(tp_sell, "#.##") + "\n"
+            info_text += "Risk Pips: " + str.tostring(risk_pips_sell, "#.##") + " | Profit Pips: " + str.tostring(profit_pips_sell, "#.##") + "\n"
+            info_text += "Risk/Reward: " + str.tostring(rr_sell, "#.##") + ":1 ✅\n"
+            info_text += "Confluence: " + str.tostring(confluence_sell) + "/4\n"
+            if premium_sell
+                info_text += "Signal Quality: 💎 PREMIUM\n"
+            if super_premium_sell
+                info_text += "Signal Quality: 💎💎💎 SUPER PREMIUM\n"
+    else
+        info_text += "⏳ Waiting for Signal...\n"
+        info_text += "RSI Distance from 50: " + str.tostring(rsi_distance_from_50, "#.##") + "\n"
+        info_text += "Confluence BUY: " + str.tostring(confluence_buy) + "/4\n"
+        info_text += "Confluence SELL: " + str.tostring(confluence_sell) + "/4\n"
+    
+    info_text += "═══════════════════════════════════\n"
+    info_text += "Optimized for 1M & 5M Charts 📊\n"
+    
+    label.new(bar_index, high, info_text, color=color.new(color.gray, 70), textcolor=color.white, 
+              style=label.style_label_left, size=size.small, text_font_family=font.family_monospace)
