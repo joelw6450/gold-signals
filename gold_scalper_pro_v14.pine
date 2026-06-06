@@ -1,0 +1,120 @@
+//@version=6
+indicator("🏆 Gold Scalper PRO v14 (Safe HTF + Fixed Levels)", overlay=true, max_labels_count=100, max_lines_count=200)
+
+// --- INPUTS ---
+grp_main      = "Main Indicators"
+fast_ma_len   = input.int(13, "Fast EMA", minval=1, group=grp_main)
+slow_ma_len   = input.int(50, "Slow EMA", minval=1, group=grp_main)
+rsi_len       = input.int(7, "RSI Length", minval=1, group=grp_main)
+atr_len       = input.int(14, "ATR Length", minval=1, group=grp_main)
+
+grp_filters   = "Filters & Session"
+vol_factor    = input.float(1.15, "Volatility Filter (ATR x SMA)", step=0.05, group=grp_filters)
+cooldownBars  = input.int(5, "Cooldown Bars", minval=0, group=grp_filters)
+useSession    = input.bool(true, "Use Session Filter", group=grp_filters)
+tradeSession  = input.session("0700-2000", "Active Session", group=grp_filters)
+
+grp_htf       = "Higher Timeframe"
+useHTF        = input.bool(true, "Use HTF Filter", group=grp_htf)
+htf_tf        = input.timeframe("60", "HTF Timeframe", group=grp_htf)
+htf_ema_len   = input.int(200, "HTF EMA Length", minval=1, group=grp_htf)
+
+grp_risk      = "Risk Settings"
+sl_atr_mult   = input.float(1.2, "Stop Loss ATR Multiplier", step=0.1, group=grp_risk)
+rr_ratio      = input.float(1.5, "Risk Reward Ratio", step=0.1, group=grp_risk)
+showLevels    = input.bool(true, "Show SL/TP Levels", group=grp_risk)
+
+// --- CORE CALCULATIONS ---
+ema_fast = ta.ema(close, fast_ma_len)
+ema_slow = ta.ema(close, slow_ma_len)
+atr      = ta.atr(atr_len)
+atr_avg  = ta.sma(atr, 20)
+rsi      = ta.rsi(close, rsi_len)
+
+vol_ok    = atr > atr_avg * vol_factor
+inSession = not na(time(timeframe.period, tradeSession))
+
+// --- HTF FILTER (Lookahead-Bias fixed by forcing closed bar index [1]) ---
+htf_ema = request.security(syminfo.tickerid, htf_tf, ta.ema(close, htf_ema_len)[1], barmerge.gaps_off, barmerge.lookahead_off)
+htf_bull = close > htf_ema
+htf_bear = close < htf_ema
+
+// --- TREND FILTER ---
+trend_up   = ema_fast > ema_slow and close > ema_slow
+trend_down = ema_fast < ema_slow and close < ema_slow
+
+// --- PULLBACK LOGIC ---
+pullback_buy  = ta.crossover(close, ema_fast) and low < ema_fast and rsi > 40 and rsi < 65
+pullback_sell = ta.crossunder(close, ema_fast) and high > ema_fast and rsi < 60 and rsi > 35
+
+// --- CONFIRMATION ---
+bull_candle = close > open
+bear_candle = close < open
+
+// --- COOLDOWN ---
+var int last_buy_bar = na
+var int last_sell_bar = na
+buy_cooldown_ok  = na(last_buy_bar)  or (bar_index - last_buy_bar > cooldownBars)
+sell_cooldown_ok = na(last_sell_bar) or (bar_index - last_sell_bar > cooldownBars)
+
+// --- SIGNALS ---
+buy_signal  = trend_up and pullback_buy and bull_candle and vol_ok and (not useSession or inSession) and (not useHTF or htf_bull) and buy_cooldown_ok
+sell_signal = trend_down and pullback_sell and bear_candle and vol_ok and (not useSession or inSession) and (not useHTF or htf_bear) and sell_cooldown_ok
+
+if buy_signal
+    last_buy_bar := bar_index
+if sell_signal
+    last_sell_bar := bar_index
+
+// --- SL / TP CALCULATIONS ---
+buy_entry  = close
+sell_entry = close
+
+buy_sl = buy_entry - atr * sl_atr_mult
+buy_tp = buy_entry + (buy_entry - buy_sl) * rr_ratio
+
+sell_sl = sell_entry + atr * sl_atr_mult
+sell_tp = sell_entry - (sell_sl - sell_entry) * rr_ratio
+
+// --- PLOTS ---
+plot(ema_fast, color=color.teal, linewidth=2, title="Fast EMA")
+plot(ema_slow, color=color.orange, linewidth=2, title="Slow EMA")
+plot(useHTF ? htf_ema : na, color=color.fuchsia, linewidth=2, title="HTF EMA")
+
+plotshape(buy_signal, title="Buy Signal", style=shape.labelup, location=location.belowbar, color=color.teal, text="BUY", textcolor=color.white, size=size.tiny)
+plotshape(sell_signal, title="Sell Signal", style=shape.labeldown, location=location.abovebar, color=color.orange, text="SELL", textcolor=color.white, size=size.tiny)
+
+// --- LEVEL LINES & LABELS (Persistence and deletion fixed) ---
+var line buySLLine = na
+var line buyTPLine = na
+var label buySLLabel = na
+var label buyTPLabel = na
+
+var line sellSLLine = na
+var line sellTPLine = na
+var label sellSLLabel = na
+var label sellTPLabel = na
+
+if showLevels and buy_signal
+    line.delete(buySLLine)
+    line.delete(buyTPLine)
+    label.delete(buySLLabel)
+    label.delete(buyTPLabel)
+    buySLLine := line.new(bar_index, buy_sl, bar_index + 20, buy_sl, extend=extend.none, color=color.red, width=2)
+    buyTPLine := line.new(bar_index, buy_tp, bar_index + 20, buy_tp, extend=extend.none, color=color.green, width=2)
+    buySLLabel := label.new(bar_index, buy_sl, "SL", style=label.style_label_left, color=color.red, textcolor=color.white)
+    buyTPLabel := label.new(bar_index, buy_tp, "TP", style=label.style_label_left, color=color.green, textcolor=color.white)
+
+if showLevels and sell_signal
+    line.delete(sellSLLine)
+    line.delete(sellTPLine)
+    label.delete(sellSLLabel)
+    label.delete(sellTPLabel)
+    sellSLLine := line.new(bar_index, sell_sl, bar_index + 20, sell_sl, extend=extend.none, color=color.red, width=2)
+    sellTPLine := line.new(bar_index, sell_tp, bar_index + 20, sell_tp, extend=extend.none, color=color.green, width=2)
+    sellSLLabel := label.new(bar_index, sell_sl, "SL", style=label.style_label_left, color=color.red, textcolor=color.white)
+    sellTPLabel := label.new(bar_index, sell_tp, "TP", style=label.style_label_left, color=color.green, textcolor=color.white)
+
+// --- ALERTS ---
+alertcondition(buy_signal, title="Gold Buy Alert", message="Gold Scalper PRO v14: BUY signal on {{ticker}} {{interval}}")
+alertcondition(sell_signal, title="Gold Sell Alert", message="Gold Scalper PRO v14: SELL signal on {{ticker}} {{interval}}")
