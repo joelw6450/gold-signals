@@ -100,11 +100,10 @@ sell_signal = trend_down and pullback_sell and bear_candle and vol_ok and (not u
 premium_buy = buy_signal and confluence_buy == 4
 premium_sell = sell_signal and confluence_sell == 4
 
-// --- PLOTS ---
-if showEMA
-    plot(ema_fast, color=color.teal, linewidth=2, title="Fast EMA (9)")
-    plot(ema_slow, color=color.orange, linewidth=2, title="Slow EMA (40)")
-    plot(useHTF ? htf_ema : na, color=color.fuchsia, linewidth=2, title="HTF EMA")
+// --- PLOTS (OUTSIDE IF - FIXED!) ---
+plot(ema_fast, color=showEMA ? color.teal : na, linewidth=2, title="Fast EMA (9)")
+plot(ema_slow, color=showEMA ? color.orange : na, linewidth=2, title="Slow EMA (40)")
+plot(useHTF and showEMA ? htf_ema : na, color=color.fuchsia, linewidth=2, title="HTF EMA")
 
 // --- LIVE TRADE TRACKING STATE ENGINE ---
 var int active_trade = 0 // 0 = none, 1 = long, -1 = short
@@ -115,7 +114,7 @@ var int start_bar = na
 var box box_tp = na
 var box box_sl = na
 var label entry_label = na
-var string trade_quality = ""
+var bool is_premium = false
 
 // 1. Manage Active Trades
 if active_trade == 1 // LONG TRACKING
@@ -171,14 +170,14 @@ if active_trade == 0
         tp_price := entry_price + (entry_price - sl_price) * rr_ratio
         start_bar := bar_index
         last_buy_bar := bar_index
-        trade_quality := premium_buy ? "💎 PREMIUM" : "✅ NORMAL"
+        is_premium := premium_buy
         
         if showBoxes
             box_tp := box.new(left=bar_index, top=tp_price, right=bar_index, bottom=entry_price, bgcolor=color.new(color.green, 85), border_color=color.green, text="TP 🎯", text_color=color.white, text_size=size.small, text_valign=text.align_center, text_halign=text.align_center)
             box_sl := box.new(left=bar_index, top=entry_price, right=bar_index, bottom=sl_price, bgcolor=color.new(color.red, 85), border_color=color.red, text="SL ❌", text_color=color.white, text_size=size.small, text_valign=text.align_center, text_halign=text.align_center)
         
         if showLabels
-            entry_label := label.new(bar_index, low * 0.998, "🟢 BUY\n" + trade_quality + "\nEntry: " + str.tostring(entry_price, "#.##"), color=color.new(color.lime, 0), textcolor=color.black, style=label.style_label_up, size=size.small)
+            entry_label := label.new(bar_index, low * 0.998, "🟢 BUY\n" + (premium_buy ? "💎 PREMIUM" : "✅ NORMAL") + "\nEntry: " + str.tostring(entry_price, "#.##"), color=color.new(color.lime, 0), textcolor=color.black, style=label.style_label_up, size=size.small)
 
     else if sell_signal
         active_trade := -1
@@ -187,17 +186,17 @@ if active_trade == 0
         tp_price := entry_price - (sl_price - entry_price) * rr_ratio
         start_bar := bar_index
         last_sell_bar := bar_index
-        trade_quality := premium_sell ? "💎 PREMIUM" : "✅ NORMAL"
+        is_premium := premium_sell
         
         if showBoxes
             box_tp := box.new(left=bar_index, top=entry_price, right=bar_index, bottom=tp_price, bgcolor=color.new(color.green, 85), border_color=color.green, text="TP 🎯", text_color=color.white, text_size=size.small, text_valign=text.align_center, text_halign=text.align_center)
             box_sl := box.new(left=bar_index, top=sl_price, right=bar_index, bottom=entry_price, bgcolor=color.new(color.red, 85), border_color=color.red, text="SL ❌", text_color=color.white, text_size=size.small, text_valign=text.align_center, text_halign=text.align_center)
         
         if showLabels
-            entry_label := label.new(bar_index, high * 1.002, "🔴 SELL\n" + trade_quality + "\nEntry: " + str.tostring(entry_price, "#.##"), color=color.new(color.orange, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
+            entry_label := label.new(bar_index, high * 1.002, "🔴 SELL\n" + (premium_sell ? "💎 PREMIUM" : "✅ NORMAL") + "\nEntry: " + str.tostring(entry_price, "#.##"), color=color.new(color.orange, 0), textcolor=color.white, style=label.style_label_down, size=size.small)
 
-// --- ALERTS ---
-alertcondition(buy_signal, title="Gold Buy Alert", message="🟢 BUY: " + trade_quality + " Entry {{close}} | R:R 2.0:1")
-alertcondition(sell_signal, title="Gold Sell Alert", message="🔴 SELL: " + trade_quality + " Entry {{close}} | R:R 2.0:1")
-alertcondition(premium_buy, title="Premium Buy Alert", message="💎 PREMIUM BUY: Entry {{close}} | 4/4 Confluence")
-alertcondition(premium_sell, title="Premium Sell Alert", message="💎 PREMIUM SELL: Entry {{close}} | 4/4 Confluence")
+// --- ALERTS (FIXED - No variable concatenation) ---
+alertcondition(buy_signal, title="Gold Buy Alert", message="🟢 BUY SIGNAL | Entry {{close}} | R:R 2.0:1")
+alertcondition(sell_signal, title="Gold Sell Alert", message="🔴 SELL SIGNAL | Entry {{close}} | R:R 2.0:1")
+alertcondition(premium_buy, title="Premium Buy Alert", message="💎 PREMIUM BUY | Confluence 4/4 | Entry {{close}}")
+alertcondition(premium_sell, title="Premium Sell Alert", message="💎 PREMIUM SELL | Confluence 4/4 | Entry {{close}}")
