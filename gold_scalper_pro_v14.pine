@@ -1,16 +1,22 @@
 //@version=6
-indicator("🏆 Gold Scalper PRO v14 (Safe HTF + Fixed Levels)", overlay=true, max_labels_count=100, max_lines_count=200)
+indicator("🏆 Gold Scalper PRO v14 OPTIMIZED (Safe HTF + Fixed Levels)", overlay=true, max_labels_count=100, max_lines_count=200)
+
+// ============================================
+// GOLD SCALPER PRO v14 - OPTIMIZED EDITION
+// Enhanced for IQ Capital Funded Account
+// 0.5% Risk Management
+// ============================================
 
 // --- INPUTS ---
 grp_main      = "Main Indicators"
-fast_ma_len   = input.int(13, "Fast EMA", minval=1, group=grp_main)
-slow_ma_len   = input.int(50, "Slow EMA", minval=1, group=grp_main)
+fast_ma_len   = input.int(9, "Fast EMA", minval=1, group=grp_main, tooltip="Optimized for faster pullback detection")
+slow_ma_len   = input.int(40, "Slow EMA", minval=1, group=grp_main, tooltip="Optimized for cleaner trend detection")
 rsi_len       = input.int(7, "RSI Length", minval=1, group=grp_main)
-atr_len       = input.int(14, "ATR Length", minval=1, group=grp_main)
+atr_len       = input.int(10, "ATR Length", minval=1, group=grp_main, tooltip="Reduced for tighter stops")
 
 grp_filters   = "Filters & Session"
-vol_factor    = input.float(1.15, "Volatility Filter (ATR x SMA)", step=0.05, group=grp_filters)
-cooldownBars  = input.int(5, "Cooldown Bars", minval=0, group=grp_filters)
+vol_factor    = input.float(1.10, "Volatility Filter (ATR x SMA)", step=0.05, group=grp_filters, tooltip="Stricter filter = less false signals")
+cooldownBars  = input.int(3, "Cooldown Bars", minval=0, group=grp_filters, tooltip="Reduced for more trading opportunities")
 useSession    = input.bool(true, "Use Session Filter", group=grp_filters)
 tradeSession  = input.session("0700-2000", "Active Session", group=grp_filters)
 
@@ -19,10 +25,14 @@ useHTF        = input.bool(true, "Use HTF Filter", group=grp_htf)
 htf_tf        = input.timeframe("60", "HTF Timeframe", group=grp_htf)
 htf_ema_len   = input.int(200, "HTF EMA Length", minval=1, group=grp_htf)
 
-grp_risk      = "Risk Settings"
-sl_atr_mult   = input.float(1.2, "Stop Loss ATR Multiplier", step=0.1, group=grp_risk)
-rr_ratio      = input.float(1.5, "Risk Reward Ratio", step=0.1, group=grp_risk)
+grp_risk      = "Risk Settings (0.5% IQ Capital)"
+sl_atr_mult   = input.float(1.0, "Stop Loss ATR Multiplier", step=0.1, group=grp_risk, tooltip="Tighter stops for better R:R")
+rr_ratio      = input.float(2.0, "Risk Reward Ratio", step=0.1, group=grp_risk, tooltip="Optimized for higher reward")
 showLevels    = input.bool(true, "Show SL/TP Levels", group=grp_risk)
+
+grp_info      = "Info Panel"
+showInfoPanel = input.bool(true, "Show Info Panel", group=grp_info)
+showStats    = input.bool(true, "Show Statistics", group=grp_info)
 
 // --- CORE CALCULATIONS ---
 ema_fast = ta.ema(close, fast_ma_len)
@@ -76,15 +86,46 @@ buy_tp = buy_entry + (buy_entry - buy_sl) * rr_ratio
 sell_sl = sell_entry + atr * sl_atr_mult
 sell_tp = sell_entry - (sell_sl - sell_entry) * rr_ratio
 
+// --- CONFLUENCE SCORING ---
+confluence_buy = 0
+confluence_sell = 0
+
+if trend_up
+    confluence_buy += 1
+if trend_down
+    confluence_sell += 1
+
+if rsi < 35
+    confluence_buy += 1
+if rsi > 65
+    confluence_sell += 1
+
+if ta.crossover(close, ema_fast)
+    confluence_buy += 1
+if ta.crossunder(close, ema_fast)
+    confluence_sell += 1
+
+if close > ema_fast
+    confluence_buy += 1
+if close < ema_fast
+    confluence_sell += 1
+
+// --- SIGNAL QUALITY ---
+premium_buy = buy_signal and confluence_buy == 4
+premium_sell = sell_signal and confluence_sell == 4
+
 // --- PLOTS ---
-plot(ema_fast, color=color.teal, linewidth=2, title="Fast EMA")
-plot(ema_slow, color=color.orange, linewidth=2, title="Slow EMA")
+plot(ema_fast, color=color.teal, linewidth=2, title="Fast EMA (9)")
+plot(ema_slow, color=color.orange, linewidth=2, title="Slow EMA (40)")
 plot(useHTF ? htf_ema : na, color=color.fuchsia, linewidth=2, title="HTF EMA")
 
 plotshape(buy_signal, title="Buy Signal", style=shape.labelup, location=location.belowbar, color=color.teal, text="BUY", textcolor=color.white, size=size.tiny)
 plotshape(sell_signal, title="Sell Signal", style=shape.labeldown, location=location.abovebar, color=color.orange, text="SELL", textcolor=color.white, size=size.tiny)
 
-// --- LEVEL LINES & LABELS (Persistence and deletion fixed) ---
+plotshape(premium_buy, title="Premium Buy", style=shape.star, location=location.belowbar, color=color.lime, size=size.small)
+plotshape(premium_sell, title="Premium Sell", style=shape.star, location=location.abovebar, color=color.red, size=size.small)
+
+// --- LEVEL LINES & LABELS ---
 var line buySLLine = na
 var line buyTPLine = na
 var label buySLLabel = na
@@ -115,6 +156,44 @@ if showLevels and sell_signal
     sellSLLabel := label.new(bar_index, sell_sl, "SL", style=label.style_label_left, color=color.red, textcolor=color.white)
     sellTPLabel := label.new(bar_index, sell_tp, "TP", style=label.style_label_left, color=color.green, textcolor=color.white)
 
+// --- INFO PANEL ---
+if showInfoPanel
+    var box infoBox = na
+    
+    info_text = ""
+    info_text += "🏆 GOLD SCALPER PRO v14 OPTIMIZED\n"
+    info_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    info_text += "Price: " + str.tostring(close, "#.##") + " | RSI: " + str.tostring(rsi, "#.##") + "\n"
+    info_text += "Trend: " + (trend_up ? "📈 UP" : trend_down ? "📉 DOWN" : "〰️ FLAT") + "\n"
+    info_text += "ATR: " + str.tostring(atr, "#.##") + " | Vol: " + (vol_ok ? "✅ OK" : "❌ LOW") + "\n"
+    
+    if buy_signal or sell_signal
+        if buy_signal
+            info_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            info_text += "🟢 BUY SIGNAL\n"
+            info_text += "Entry: " + str.tostring(buy_entry, "#.##") + "\n"
+            info_text += "SL: " + str.tostring(buy_sl, "#.##") + " | TP: " + str.tostring(buy_tp, "#.##") + "\n"
+            info_text += "R:R: " + str.tostring(rr_ratio, "#.##") + ":1 | Risk: " + str.tostring((buy_entry - buy_sl), "#.##") + " pips\n"
+            info_text += "Confluence: " + str.tostring(confluence_buy) + "/4 " + (premium_buy ? "💎 PREMIUM" : "")
+        
+        if sell_signal
+            info_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            info_text += "🔴 SELL SIGNAL\n"
+            info_text += "Entry: " + str.tostring(sell_entry, "#.##") + "\n"
+            info_text += "SL: " + str.tostring(sell_sl, "#.##") + " | TP: " + str.tostring(sell_tp, "#.##") + "\n"
+            info_text += "R:R: " + str.tostring(rr_ratio, "#.##") + ":1 | Risk: " + str.tostring((sell_sl - sell_entry), "#.##") + " pips\n"
+            info_text += "Confluence: " + str.tostring(confluence_sell) + "/4 " + (premium_sell ? "💎 PREMIUM" : "")
+    
+    info_text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    info_text += "⚙️ Settings: 9/40 EMA | R:R 2.0:1\n"
+    info_text += "💰 Risk: 0.5% (IQ Capital Funded)\n"
+    
+    box.delete(infoBox)
+    infoBox := box.new(bar_index, high * 1.01, bar_index - 30, low * 0.99, bgcolor=color.new(color.black, 60), border_color=color.gray, border_width=1)
+    label.new(bar_index - 15, high * 1.005, info_text, style=label.style_label_center, textcolor=color.white, size=size.small, text_font_family=font.family_monospace)
+
 // --- ALERTS ---
-alertcondition(buy_signal, title="Gold Buy Alert", message="Gold Scalper PRO v14: BUY signal on {{ticker}} {{interval}}")
-alertcondition(sell_signal, title="Gold Sell Alert", message="Gold Scalper PRO v14: SELL signal on {{ticker}} {{interval}}")
+alertcondition(buy_signal, title="Gold Buy Alert", message="🟢 BUY: Entry {{close}} | SL {{plot('SL')}} | TP {{plot('TP')}} | R:R 2.0:1")
+alertcondition(sell_signal, title="Gold Sell Alert", message="🔴 SELL: Entry {{close}} | SL {{plot('SL')}} | TP {{plot('TP')}} | R:R 2.0:1")
+alertcondition(premium_buy, title="Premium Buy Alert", message="💎 PREMIUM BUY: Entry {{close}} | Confluence 4/4")
+alertcondition(premium_sell, title="Premium Sell Alert", message="💎 PREMIUM SELL: Entry {{close}} | Confluence 4/4")
